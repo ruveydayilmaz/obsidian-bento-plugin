@@ -1,5 +1,6 @@
 import {
   App,
+  Component,
   debounce,
   FuzzySuggestModal,
   MarkdownPostProcessorContext,
@@ -109,12 +110,12 @@ function onClickOutside(
     if (targets.some((t) => t.contains(node))) return;
     callback();
 
-    document.removeEventListener("pointerdown", handler, { capture: true });
+    activeDocument.removeEventListener("pointerdown", handler, { capture: true });
   };
-  document.addEventListener("pointerdown", handler, { capture: true });
+  activeDocument.addEventListener("pointerdown", handler, { capture: true });
 
   return () =>
-    document.removeEventListener("pointerdown", handler, { capture: true });
+    activeDocument.removeEventListener("pointerdown", handler, { capture: true });
 }
 
 function isDestroyable(
@@ -127,7 +128,9 @@ function isDestroyable(
 
 let widgetRegistry = new WeakMap<HTMLElement, BentoWidget>();
 
-abstract class BentoWidget {
+abstract class BentoWidget implements Destroyable {
+  protected renderComponent = new Component();
+
   constructor(
     protected container: HTMLElement,
     protected item: BentoItem,
@@ -137,6 +140,10 @@ abstract class BentoWidget {
   ) { }
 
   abstract render(): Promise<void>;
+
+  cleanup(): void {
+    this.renderComponent.unload();
+  }
 }
 
 class TextWidget extends BentoWidget {
@@ -155,7 +162,7 @@ class MarkdownWidget extends BentoWidget {
       this.item.content ?? "*Empty markdown*",
       rendered,
       this.ctx.sourcePath,
-      this.plugin,
+      this.renderComponent,
     );
     rendered
       .querySelectorAll(".block-language-bento")
@@ -187,7 +194,7 @@ class PageWidget extends BentoWidget implements Destroyable {
   watchedPath: string | null = null;
 
   private debouncedRerender = debounce(async () => {
-    if (!document.contains(this.container)) return;
+    if (!activeDocument.contains(this.container)) return;
     this.container.empty();
     await this.renderContent();
   }, 300);
@@ -218,11 +225,13 @@ class PageWidget extends BentoWidget implements Destroyable {
         cancel?: () => void;
       }
     ).cancel?.();
+    super.cleanup();
   }
 
   private async renderContent() {
+    if (!this.watchedPath) return;
     const file = this.plugin.app.vault.getAbstractFileByPath(
-      this.item.content!,
+      this.watchedPath,
     );
     if (!(file instanceof TFile)) {
       this.container.createEl("div", { text: "Page not found" });
@@ -238,7 +247,7 @@ class PageWidget extends BentoWidget implements Destroyable {
       content,
       rendered,
       file.path,
-      this.plugin,
+      this.renderComponent,
     );
     rendered
       .querySelectorAll(".block-language-bento")
@@ -253,28 +262,30 @@ class PageWidget extends BentoWidget implements Destroyable {
     checkboxes.forEach((checkbox, index) => {
       const fresh = checkbox.cloneNode(true) as HTMLInputElement;
       checkbox.replaceWith(fresh);
-      fresh.addEventListener("click", async (e) => {
+      fresh.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
 
-        await this.plugin.app.vault.process(file, (current) => {
-          const lines = current.split("\n");
-          let found = 0;
-          for (let i = 0; i < lines.length; i++) {
-            const unchecked = /^(\s*[-*+]|\s*\d+[.)]) \[ \]/.test(lines[i]);
-            const checked = /^(\s*[-*+]|\s*\d+[.)]) \[x\]/i.test(lines[i]);
-            if (unchecked || checked) {
-              if (found === index) {
-                lines[i] = unchecked
-                  ? lines[i].replace("[ ]", "[x]")
-                  : lines[i].replace(/\[x\]/i, "[ ]");
-                break;
+        void this.plugin.app.vault
+          .process(file, (current) => {
+            const lines = current.split("\n");
+            let found = 0;
+            for (let i = 0; i < lines.length; i++) {
+              const unchecked = /^(\s*[-*+]|\s*\d+[.)]) \[ \]/.test(lines[i]);
+              const checked = /^(\s*[-*+]|\s*\d+[.)]) \[x\]/i.test(lines[i]);
+              if (unchecked || checked) {
+                if (found === index) {
+                  lines[i] = unchecked
+                    ? lines[i].replace("[ ]", "[x]")
+                    : lines[i].replace(/\[x\]/i, "[ ]");
+                  break;
+                }
+                found++;
               }
-              found++;
             }
-          }
-          return lines.join("\n");
-        });
+            return lines.join("\n");
+          })
+          .catch((err) => console.error("Bento: failed to update checkbox", err));
       });
     });
   }
@@ -323,7 +334,7 @@ class CountdownWidget extends BentoWidget implements Destroyable {
 
   cleanup() {
     if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
+      window.clearInterval(this.intervalId);
       this.intervalId = null;
     }
   }
@@ -500,7 +511,8 @@ export default class BentoPlugin extends Plugin {
           this.addNewItem(state, type);
           state.dirty = true;
           const newItem = state.items[state.items.length - 1];
-          const grid = container.querySelector(".bento-grid") as HTMLElement;
+          const grid = container.querySelector<HTMLElement>(".bento-grid");
+          if (!grid) return;
           await this.renderItem(grid, state, ctx, newItem);
           this.updateGridHeight(grid, state.items);
           this.debouncedSave(ctx, state, container);
@@ -560,7 +572,9 @@ export default class BentoPlugin extends Plugin {
   ) {
     container.empty();
     for (const item of state.items) {
-      this.renderItem(container, state, ctx, item);
+      void this.renderItem(container, state, ctx, item).catch((err) =>
+        console.error("Bento: failed to render item", err),
+      );
     }
   }
 
@@ -807,22 +821,22 @@ export default class BentoPlugin extends Plugin {
       () => {
         new ImageSelectModal(
           this.app,
-          async (file) => {
+          (file) => {
             item.content = file.path;
             state.dirty = true;
 
-            await this.updateItem(
+            void this.updateItem(
               container,
               state,
               ctx,
               item
-            );
-
-            this.debouncedSave(
-              ctx,
-              state,
-              container
-            );
+            ).then(() => {
+              this.debouncedSave(
+                ctx,
+                state,
+                container
+              );
+            }).catch((err) => console.error("Bento: failed to update image item", err));
           }
         ).open();
       }
@@ -832,12 +846,12 @@ export default class BentoPlugin extends Plugin {
       uploadBtn,
       "click",
       () => {
-        this.uploadImage(
+        void this.uploadImage(
           item,
           state,
           ctx,
           container
-        );
+        ).catch((err) => console.error("Bento: failed to upload image", err));
       }
     );
   }
@@ -882,22 +896,22 @@ export default class BentoPlugin extends Plugin {
   ) {
     new PageSelectModal(
       this.app,
-      async (file) => {
+      (file) => {
         item.content = file.path;
         state.dirty = true;
 
-        await this.updateItem(
+        void this.updateItem(
           container,
           state,
           ctx,
           item
-        );
-
-        this.debouncedSave(
-          ctx,
-          state,
-          container
-        );
+        ).then(() => {
+          this.debouncedSave(
+            ctx,
+            state,
+            container
+          );
+        }).catch((err) => console.error("Bento: failed to update page item", err));
       }
     ).open();
   }
