@@ -1,0 +1,11 @@
+{
+  "id": "bento-grid",
+  "name": "Bento Grid",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "author": "Ruveyda Yilmaz",
+  "description": "A draggable, resizable bento-style grid for embedding markdown and widgets.",
+  "isDesktopOnly": false,
+  "authorUrl": "https://github.com/ruveydayilmaz",
+  "fundingUrl": "https://ko-fi.com/ruveyda"
+}

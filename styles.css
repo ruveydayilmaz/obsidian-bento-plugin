@@ -1,0 +1,475 @@
+.bento-outer-div {
+  width: 100%;
+  min-height: 600px;
+}
+
+.bento-grid {
+  position: relative;
+  width: 100%;
+  margin-top: 20px;
+  height: var(--bento-grid-height);
+}
+
+.bento-toolbar {
+  position: sticky;
+  top: -32px;
+  z-index: 999;
+  background: var(--background-primary);
+  padding: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: end;
+  align-items: center;
+}
+
+.bento-item-header-div {
+  position: relative;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: grab;
+}
+
+.bento-item-header-div:active {
+  cursor: grabbing;
+}
+
+.bento-add-btn {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.bento-add-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.bento-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 8px;
+  margin-top: 4px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-s);
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  z-index: 1000;
+}
+
+.hidden {
+  display: none;
+}
+
+.bento-dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bento-dropdown-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bento-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bento-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  font-family: "Inter", sans-serif;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: #444;
+}
+
+.progress-percent {
+  font-weight: 600;
+}
+
+.progress-title {
+  font-size: 13px;
+  color: #666;
+}
+
+.progress-bar-wrapper {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background-color: #e5f7ed;
+  border-radius: 10px;
+  overflow: hidden;
+  --progress-value: 0%;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: var(--progress-value);
+  background: linear-gradient(90deg, #00985b, #3ce68b);
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.bento-item {
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  transition: box-shadow 0.15s ease;
+  left: var(--bento-item-x);
+  top: var(--bento-item-y);
+  width: var(--bento-item-width);
+  height: var(--bento-item-height);
+  /* cursor: default; */
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.bento-widget-wrap {
+  flex: 1;
+  border-radius: 12px;
+  padding: 4px;
+  overflow: hidden;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: default;
+}
+
+.bento-widget-wrap textarea {
+  width: 100%;
+  height: 100%;
+  cursor: text;
+  user-select: text;
+}
+
+.bento-menu-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: white;
+  font-size: 14px;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+
+.bento-item:hover .bento-menu-btn {
+  opacity: 1;
+}
+
+.bento-dropdown.show {
+  display: flex;
+}
+
+.bento-dropdown button,
+.bento-dropdown label {
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.countdown-wrapper {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+}
+
+.countdown-box {
+  text-align: center;
+}
+
+.countdown-digits {
+  font-size: 2.8em;
+  font-family: var(--font-monospace);
+  font-weight: 600;
+}
+
+.countdown-label {
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
+.colored-background {
+  background-color: var(--background-secondary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.bento-item.dragging {
+  opacity: 0.8;
+  z-index: 100;
+  transition: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+  cursor: grabbing;
+}
+
+.bento-item.dragging .bento-widget-wrap {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.bento-item-header {
+  font-weight: 600;
+  font-size: 0.9em;
+  padding: 4px;
+  user-select: none;
+}
+
+.resize-handle {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 0.2s;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  cursor: inherit;
+  user-select: none;
+}
+
+.bento-item:hover .resize-handle {
+  opacity: 1;
+}
+
+.right {
+  right: 0px;
+  bottom: 50%;
+  top: 50%;
+  cursor: col-resize;
+}
+
+.left {
+  left: 0px;
+  bottom: 50%;
+  top: 50%;
+  cursor: col-resize;
+}
+
+.bottom {
+  right: 50%;
+  left: 50%;
+  bottom: 0px;
+  cursor: row-resize;
+}
+
+.top {
+  right: 50%;
+  left: 50%;
+  top: 0px;
+  cursor: row-resize;
+}
+
+.corner {
+  right: 4px;
+  bottom: 4px;
+  cursor: se-resize;
+}
+
+.text-widget {
+  font-size: 1em;
+  padding: 6px;
+}
+
+.markdown-widget {
+  padding: 6px;
+}
+
+.image-widget {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+}
+
+.flip {
+  position: relative;
+  width: 50px;
+  height: 70px;
+  perspective: 600px;
+  transform-style: preserve-3d;
+}
+
+.flip-clock {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.flip-top,
+.flip-bottom,
+.flip-top-next,
+.flip-bottom-next {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: #fff;
+  border: 1px solid #ccc;
+  font-size: 50px;
+  font-weight: bold;
+  line-height: 70px;
+  text-align: center;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.flip-top {
+  top: 0;
+  border-bottom: 1px solid #999;
+  border-radius: 6px 6px 0 0;
+  transform-origin: center bottom;
+  z-index: 1;
+}
+
+.flip-bottom {
+  bottom: 0;
+  line-height: 0;
+  border-radius: 0 0 6px 6px;
+  transform-origin: center top;
+  z-index: 2;
+}
+
+.flip-top-next {
+  top: 0;
+  border-bottom: 1px solid #999;
+  border-radius: 6px 6px 0 0;
+  transform-origin: center bottom;
+  transform: rotateX(180deg);
+  z-index: 2;
+}
+
+.flip-bottom-next {
+  bottom: 0;
+  line-height: 0;
+  border-radius: 0 0 6px 6px;
+  transform-origin: center top;
+  transform: rotateX(-180deg);
+  z-index: 1;
+}
+
+.flip.running .flip-top-next {
+  animation: flipTop 0.25s ease-in forwards;
+}
+.flip.running .flip-bottom {
+  animation: flipBottom 0.25s 0.25s ease-out forwards;
+}
+
+@keyframes flipTop {
+  0% { transform: rotateX(0); }
+  100% { transform: rotateX(-180deg); }
+}
+
+@keyframes flipBottom {
+  0% { transform: rotateX(180deg); }
+  100% { transform: rotateX(0); }
+}
+
+.phase-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 8px;
+  color: #444;
+  margin-bottom: 10px;
+}
+
+.pomodoro-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bento-generic {
+  background: var(--background-secondary);
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.default-padding {
+  padding: 12px;
+}
+
+.noselect {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.flip-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flip-digits {
+  display: flex;
+  gap: 3px;
+}
+
+.flip-label {
+  margin-top: 5px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.bento-item.is-colliding {
+  border: 2px solid var(--text-error);
+  box-shadow: 0 0 10px var(--text-error);
+}
+
+.bento-item-header-div::before {
+  content: "⠿";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  color: var(--text-muted);
+  top: 2px;
+}
+
+.bento-item:hover .bento-item-header-div::before {
+  opacity: 0.5;
+}
