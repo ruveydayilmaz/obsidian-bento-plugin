@@ -4,15 +4,12 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 /** @type {import("eslint").Linter.FlatConfig[]} */
 export default [
-  // ignore build output
   {
     ignores: ["dist", "build", "node_modules"]
   },
 
-  // JS baseline (optional but recommended)
   js.configs.recommended,
 
-  // TS config (THIS is the important part)
   {
     files: ["src/**/*.ts"],
 
