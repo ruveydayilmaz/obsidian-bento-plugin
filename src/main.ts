@@ -631,6 +631,98 @@ export default class BentoPlugin extends Plugin {
     this.makeDraggable(card, item, state, container, ctx);
     this.makeResizable(card, item, state, container, ctx);
     this.addEditHandlers(widgetWrap, item, state, ctx, container);
+
+    card.tabIndex = 0;
+    this.registerDomEvent(
+      card,
+      "keydown",
+      (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          e.stopPropagation();
+          this.duplicateItem(container, state, ctx, item);
+        }
+      });
+  }
+
+  private clampToGridBounds(
+    x: number,
+    y: number,
+    width: number,
+    gridEl: HTMLElement,
+  ): { x: number; y: number } {
+    const maxX = Math.max(0, gridEl.clientWidth - width);
+    return {
+      x: Math.min(Math.max(x, 0), maxX),
+      y: Math.max(y, 0),
+    };
+  }
+
+  private findFreePosition(
+    candidate: BentoItem,
+    state: BentoState,
+    gridEl: HTMLElement,
+  ): { x: number; y: number } {
+    const STEP = 12;
+    const maxX = Math.max(0, gridEl.clientWidth - candidate.width);
+
+    let { x, y } = this.clampToGridBounds(
+      candidate.x,
+      candidate.y,
+      candidate.width,
+      gridEl,
+    );
+
+    const collides = (px: number, py: number) =>
+      this.findCollisions({ ...candidate, x: px, y: py }, state.items).length > 0;
+
+    const MAX_ATTEMPTS = 500;
+    let attempts = 0;
+    while (collides(x, y) && attempts < MAX_ATTEMPTS) {
+      x += STEP;
+      if (x > maxX) {
+        x = 0;
+        y += STEP;
+      }
+      attempts++;
+    }
+
+    if (attempts >= MAX_ATTEMPTS) {
+      x = 0;
+      y =
+        state.items.reduce((max, it) => Math.max(max, it.y + it.height), 0) +
+        STEP;
+    }
+
+    return { x, y };
+  }
+
+  private duplicateItem(
+    container: HTMLElement,
+    state: BentoState,
+    ctx: MarkdownPostProcessorContext,
+    item: BentoItem,
+  ) {
+    const clone: BentoItem = JSON.parse(JSON.stringify(item));
+    clone.id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const OFFSET = 12;
+    clone.x = item.x + OFFSET;
+    clone.y = item.y + OFFSET;
+
+    const { x, y } = this.findFreePosition(clone, state, container);
+    clone.x = x;
+    clone.y = y;
+
+    state.items.push(clone);
+    state.dirty = true;
+
+    void this.renderItem(container, state, ctx, clone)
+      .then(() => {
+        this.updateGridHeight(container, state.items);
+        this.debouncedSave(ctx, state, container);
+      })
+      .catch((err) => console.error("Bento: failed to duplicate item", err));
   }
 
   private createItemHeader(
@@ -663,6 +755,18 @@ export default class BentoPlugin extends Plugin {
         card.classList.toggle("colored-background", !item.transparent);
         state.dirty = true;
         this.debouncedSave(ctx, state, container);
+      });
+
+    const dupBtn = dropdown.createEl("button", { text: "Duplicate card" });
+    this.registerDomEvent(
+      dupBtn,
+      "click",
+      (e) => {
+        e.stopPropagation();
+        dropdown.classList.add("hidden");
+        removeOutsideListener?.();
+        removeOutsideListener = null;
+        this.duplicateItem(container, state, ctx, item);
       });
 
     const delBtn = dropdown.createEl("button", { text: "Delete card" });
@@ -1038,7 +1142,11 @@ export default class BentoPlugin extends Plugin {
           el.setPointerCapture(e.pointerId);
         }
       }
-      item.x = Math.round((startItemX + dx) / 5) * 5;
+      const maxX = Math.max(0, container.clientWidth - item.width);
+      item.x = Math.min(
+        Math.max(Math.round((startItemX + dx) / 5) * 5, 0),
+        maxX,
+      );
       item.y = Math.round((startItemY + dy) / 5) * 5;
       el.style.setProperty("--bento-item-x", `${item.x}px`);
       el.style.setProperty("--bento-item-y", `${item.y}px`);
@@ -1121,6 +1229,18 @@ export default class BentoPlugin extends Plugin {
         item.height = Math.max(50, Math.round(item.height / 5) * 5);
         item.x = Math.round(item.x / 5) * 5;
         item.y = Math.round(item.y / 5) * 5;
+
+        if (dir === "right") {
+          const maxWidth = Math.max(50, container.clientWidth - item.x);
+          item.width = Math.min(item.width, maxWidth);
+        }
+
+        if (dir === "left" && item.x < 0) {
+          const rightEdge = startItemX + startW;
+          item.x = 0;
+          item.width = Math.max(50, Math.round((rightEdge - item.x) / 5) * 5);
+        }
+
         el.style.setProperty("--bento-item-width", `${item.width}px`);
         el.style.setProperty("--bento-item-height", `${item.height}px`);
         el.style.setProperty("--bento-item-x", `${item.x}px`);
