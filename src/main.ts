@@ -128,6 +128,8 @@ function isDestroyable(
 
 let widgetRegistry = new WeakMap<HTMLElement, BentoWidget>();
 
+const BENTO_SNAP_THRESHOLD = 8;
+
 abstract class BentoWidget implements Destroyable {
   protected renderComponent = new Component();
 
@@ -703,7 +705,7 @@ export default class BentoPlugin extends Plugin {
     ctx: MarkdownPostProcessorContext,
     item: BentoItem,
   ) {
-    const clone: BentoItem = JSON.parse(JSON.stringify(item));
+    const clone: BentoItem = structuredClone(item);
     clone.id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const OFFSET = 12;
@@ -1188,16 +1190,17 @@ export default class BentoPlugin extends Plugin {
       const handle = el.createDiv(`resize-handle ${dir}`);
       handle.setText(dir === "right" || dir === "left" ? "↔" : "↕");
 
-      let startX = 0,
-        startY = 0,
-        startW = 0,
-        startH = 0;
-      let startItemX = 0,
-        startItemY = 0;
+      let startX = 0;
+      let startY = 0;
+      let startW = 0;
+      let startH = 0;
+      let startItemX = 0;
+      let startItemY = 0;
       let isColliding = false;
 
       const onPointerDown = (e: PointerEvent) => {
         e.stopPropagation();
+
         startX = e.clientX;
         startY = e.clientY;
         startW = item.width;
@@ -1215,37 +1218,83 @@ export default class BentoPlugin extends Plugin {
       const onPointerMove = (e: PointerEvent) => {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        if (dir === "right") item.width = startW + dx;
-        if (dir === "bottom") item.height = startH + dy;
+
+        if (dir === "right") {
+          item.width = startW + dx;
+        }
+
+        if (dir === "bottom") {
+          item.height = startH + dy;
+        }
+
         if (dir === "left") {
           item.width = startW - dx;
           item.x = startItemX + dx;
         }
+
         if (dir === "top") {
           item.height = startH - dy;
           item.y = startItemY + dy;
         }
-        item.width = Math.max(50, Math.round(item.width / 5) * 5);
-        item.height = Math.max(50, Math.round(item.height / 5) * 5);
-        item.x = Math.round(item.x / 5) * 5;
-        item.y = Math.round(item.y / 5) * 5;
+
+        item.width = Math.max(50, item.width);
+        item.height = Math.max(50, item.height);
 
         if (dir === "right") {
-          const maxWidth = Math.max(50, container.clientWidth - item.x);
-          item.width = Math.min(item.width, maxWidth);
+          item.width = Math.min(
+            item.width,
+            container.clientWidth - item.x,
+          );
         }
 
         if (dir === "left" && item.x < 0) {
           const rightEdge = startItemX + startW;
           item.x = 0;
-          item.width = Math.max(50, Math.round((rightEdge - item.x) / 5) * 5);
+          item.width = rightEdge;
         }
+
+        if (dir === "top" && item.y < 0) {
+          const bottomEdge = startItemY + startH;
+          item.y = 0;
+          item.height = bottomEdge;
+        }
+
+        let snapped = false;
+
+        if (dir === "right" || dir === "left") {
+          snapped = this.trySnapWidth(
+            item,
+            state,
+            dir,
+            container,
+          );
+        }
+
+        if (dir === "top" || dir === "bottom") {
+          snapped = this.trySnapHeight(
+            item,
+            state,
+            dir,
+          );
+        }
+
+        if (!snapped) {
+          item.width = Math.round(item.width / 5) * 5;
+          item.height = Math.round(item.height / 5) * 5;
+          item.x = Math.round(item.x / 5) * 5;
+          item.y = Math.round(item.y / 5) * 5;
+        }
+
+        el.classList.toggle("snap-active", snapped);
 
         el.style.setProperty("--bento-item-width", `${item.width}px`);
         el.style.setProperty("--bento-item-height", `${item.height}px`);
         el.style.setProperty("--bento-item-x", `${item.x}px`);
         el.style.setProperty("--bento-item-y", `${item.y}px`);
-        isColliding = this.findCollisions(item, state.items).length > 0;
+
+        isColliding =
+          this.findCollisions(item, state.items).length > 0;
+
         el.classList.toggle("is-colliding", isColliding);
       };
 
@@ -1256,17 +1305,22 @@ export default class BentoPlugin extends Plugin {
         if (handle.hasPointerCapture(e.pointerId)) {
           handle.releasePointerCapture(e.pointerId);
         }
+
         el.classList.remove("is-colliding");
+        el.classList.remove("snap-active");
+
         if (isColliding) {
           item.x = startItemX;
           item.y = startItemY;
           item.width = startW;
           item.height = startH;
+
           el.style.setProperty("--bento-item-x", `${item.x}px`);
           el.style.setProperty("--bento-item-y", `${item.y}px`);
           el.style.setProperty("--bento-item-width", `${item.width}px`);
           el.style.setProperty("--bento-item-height", `${item.height}px`);
         }
+
         this.debouncedSave(ctx, state, container);
         this.debouncedUpdateGridHeight(container, state.items);
       };
@@ -1285,6 +1339,162 @@ export default class BentoPlugin extends Plugin {
         item.y + item.height > other.y
       );
     });
+  }
+
+  private findHorizontalSnap(
+    edge: number,
+    items: BentoItem[],
+    selfId: string,
+  ): number | null {
+    let best: number | null = null;
+    let bestDiff = Infinity;
+
+    for (const other of items) {
+      if (other.id === selfId) continue;
+
+      const candidates = [
+        other.x, // left edge
+        other.x + other.width / 2,
+        other.x + other.width, // right edge
+      ];
+
+      for (const candidate of candidates) {
+        const diff = Math.abs(edge - candidate);
+
+        if (diff <= BENTO_SNAP_THRESHOLD && diff < bestDiff) {
+          best = candidate;
+          bestDiff = diff;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  private findVerticalSnap(
+    edge: number,
+    items: BentoItem[],
+    selfId: string,
+  ): number | null {
+    let best: number | null = null;
+    let bestDiff = Infinity;
+
+    for (const other of items) {
+      if (other.id === selfId) continue;
+
+      const candidates = [
+        other.y, // top edge
+        other.y + other.height / 2,
+        other.y + other.height, // bottom edge
+      ];
+
+      for (const candidate of candidates) {
+        const diff = Math.abs(edge - candidate);
+
+        if (diff <= BENTO_SNAP_THRESHOLD && diff < bestDiff) {
+          best = candidate;
+          bestDiff = diff;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  private trySnapWidth(
+    item: BentoItem,
+    state: BentoState,
+    dir: "left" | "right",
+    container: HTMLElement,
+  ): boolean {
+    const prevX = item.x;
+    const prevW = item.width;
+
+    if (dir === "right") {
+      const currentRight = item.x + item.width;
+      const snap = this.findHorizontalSnap(
+        currentRight,
+        state.items,
+        item.id,
+      );
+
+      if (snap === null) return false;
+
+      item.width = snap - item.x;
+    } else {
+      const currentLeft = item.x;
+      const snap = this.findHorizontalSnap(
+        currentLeft,
+        state.items,
+        item.id,
+      );
+
+      if (snap === null) return false;
+
+      const rightEdge = item.x + item.width;
+      item.x = snap;
+      item.width = rightEdge - snap;
+    }
+
+    if (
+      item.x < 0 ||
+      item.x + item.width > container.clientWidth ||
+      item.width < 50 ||
+      this.findCollisions(item, state.items).length > 0
+    ) {
+      item.x = prevX;
+      item.width = prevW;
+      return false;
+    }
+
+    return true;
+  }
+
+  private trySnapHeight(
+    item: BentoItem,
+    state: BentoState,
+    dir: "top" | "bottom",
+  ): boolean {
+    const prevY = item.y;
+    const prevH = item.height;
+
+    if (dir === "bottom") {
+      const currentBottom = item.y + item.height;
+      const snap = this.findVerticalSnap(
+        currentBottom,
+        state.items,
+        item.id,
+      );
+
+      if (snap === null) return false;
+
+      item.height = snap - item.y;
+    } else {
+      const currentTop = item.y;
+      const snap = this.findVerticalSnap(
+        currentTop,
+        state.items,
+        item.id,
+      );
+
+      if (snap === null) return false;
+
+      const bottomEdge = item.y + item.height;
+      item.y = snap;
+      item.height = bottomEdge - snap;
+    }
+
+    if (
+      item.y < 0 ||
+      item.height < 50 ||
+      this.findCollisions(item, state.items).length > 0
+    ) {
+      item.y = prevY;
+      item.height = prevH;
+      return false;
+    }
+
+    return true;
   }
 
   private saveBackToNote(

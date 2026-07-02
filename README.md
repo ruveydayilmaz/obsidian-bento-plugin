@@ -16,6 +16,8 @@
   * Countdowns
 * Flexible bento-style layouts
 * Transparent and standard widget modes
+* Duplicate a widget (NEW)
+* Snap-to-grid resizing support (NEW)
 
 ## Getting Started
 

@@ -25,7 +25,8 @@ export default [
         document: "readonly",
         console: "readonly",
         activeDocument: "readonly",
-        createEl: "readonly"
+        createEl: "readonly",
+        structuredClone: "readonly",
       }
     },
 
