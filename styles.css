@@ -148,6 +148,10 @@
   user-select: none;
 }
 
+.bento-item.snap-active {
+  outline: 2px solid var(--interactive-accent);
+}
+
 .bento-widget-wrap {
   flex: 1;
   border-radius: 12px;
