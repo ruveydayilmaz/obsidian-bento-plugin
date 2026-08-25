@@ -1,7 +1,7 @@
 {
   "id": "bento-grid",
   "name": "Bento Grid",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minAppVersion": "1.8.7",
   "author": "Ruveyda Yilmaz",
   "description": "A draggable, resizable bento-style grid for embedding markdown and widgets.",
