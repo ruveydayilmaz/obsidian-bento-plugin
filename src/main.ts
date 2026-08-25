@@ -7,12 +7,17 @@ import {
   MarkdownRenderer,
   MarkdownView,
   normalizePath,
+  Platform,
   Plugin,
   PluginManifest,
   TFile,
 } from "obsidian";
 
 type BentoItemType = "text" | "image" | "markdown" | "page" | "countdown";
+
+function cloneDeep<T>(value: T): T {
+  return structuredClone(value) as T;
+}
 
 interface BentoItem {
   id: string;
@@ -182,12 +187,12 @@ class ImageWidget extends BentoWidget {
       img.setAttr("title", this.item.content);
       img.onerror = () => {
         this.container.empty();
-        this.container.createEl("div", {
+        this.container.createDiv({
           text: "Image not found, re-upload or choose from vault",
         });
       };
     } else {
-      this.container.createEl("div", { text: "Double-click to add image" });
+      this.container.createDiv({ text: "Double-click to add image" });
     }
   }
 }
@@ -204,7 +209,7 @@ class PageWidget extends BentoWidget implements Destroyable {
   async render() {
     this.container.classList.add("bento-page");
     if (!this.item.content) {
-      this.container.createEl("div", {
+      this.container.createDiv({
         text: "Double-click to select page",
       });
       return;
@@ -236,7 +241,7 @@ class PageWidget extends BentoWidget implements Destroyable {
       this.watchedPath,
     );
     if (!(file instanceof TFile)) {
-      this.container.createEl("div", { text: "Page not found" });
+      this.container.createDiv({ text: "Page not found" });
       return;
     }
     const content = await this.plugin.app.vault.cachedRead(file);
@@ -301,18 +306,18 @@ class CountdownWidget extends BentoWidget implements Destroyable {
     this.container.classList.add("bento-countdown");
     const targetDate = this.item.content ? new Date(this.item.content) : null;
     if (!targetDate) {
-      this.container.createEl("div", { text: "No date set" });
+      this.container.createDiv({ text: "No date set" });
       return;
     }
-    const wrapper = this.container.createEl("div", {
+    const wrapper = this.container.createDiv({
       cls: "countdown-wrapper",
     });
-    const daysBox = wrapper.createEl("div", { cls: "countdown-box" });
-    const hoursBox = wrapper.createEl("div", { cls: "countdown-box" });
-    const daysDigits = daysBox.createEl("div", { cls: "countdown-digits" });
-    const daysLabel = daysBox.createEl("div", { cls: "countdown-label" });
-    const hoursDigits = hoursBox.createEl("div", { cls: "countdown-digits" });
-    const hoursLabel = hoursBox.createEl("div", { cls: "countdown-label" });
+    const daysBox = wrapper.createDiv({ cls: "countdown-box" });
+    const hoursBox = wrapper.createDiv({ cls: "countdown-box" });
+    const daysDigits = daysBox.createDiv({ cls: "countdown-digits" });
+    const daysLabel = daysBox.createDiv({ cls: "countdown-label" });
+    const hoursDigits = hoursBox.createDiv({ cls: "countdown-digits" });
+    const hoursLabel = hoursBox.createDiv({ cls: "countdown-label" });
 
     const update = () => {
       const diff = targetDate.getTime() - Date.now();
@@ -346,7 +351,7 @@ class WidgetFactory {
   constructor(private plugin: BentoPlugin) { }
 
   createWidget(
-    type: BentoItemType,
+    type: string,
     container: HTMLElement,
     item: BentoItem,
     state: BentoState,
@@ -374,6 +379,7 @@ export default class BentoPlugin extends Plugin {
   public pageWidgets = new Set<PageWidget>();
 
   private isRendering = false;
+  private mobileEditModeBlocks = new Set<string>();
 
   public debouncedUpdateGridHeight!: (
     grid: HTMLElement,
@@ -434,9 +440,16 @@ export default class BentoPlugin extends Plugin {
       this.migrateState(state);
       if (el.dataset.bentoInitialized === "true") return;
       el.dataset.bentoInitialized = "true";
+      const info = ctx.getSectionInfo(el);
+      const blockKey = info
+        ? `${ctx.sourcePath}:${info.lineStart}`
+        : ctx.sourcePath;
       const bentoOuter = el.createDiv("bento-outer-div");
       bentoOuter.dataset.bentoRoot = "true";
-      this.createToolbar(bentoOuter, state, ctx);
+      if (this.mobileEditModeBlocks.has(blockKey)) {
+        bentoOuter.classList.add("bento-edit-mode");
+      }
+      this.createToolbar(bentoOuter, state, ctx, blockKey);
       const grid = bentoOuter.createDiv("bento-grid");
       this.renderGrid(grid, state, ctx);
       this.updateGridHeight(grid, state.items);
@@ -446,6 +459,7 @@ export default class BentoPlugin extends Plugin {
   onunload() {
     Array.from(this.pageWidgets).forEach((widget) => widget.cleanup());
     this.pageWidgets.clear();
+    this.mobileEditModeBlocks.clear();
 
     widgetRegistry = new WeakMap();
     this.debouncedSave.cancel?.();
@@ -466,8 +480,36 @@ export default class BentoPlugin extends Plugin {
     container: HTMLElement,
     state: BentoState,
     ctx: MarkdownPostProcessorContext,
+    blockKey: string,
   ) {
     const toolbar = container.createDiv("bento-toolbar");
+
+    if (Platform.isMobile) {
+      const isEditingInitially = this.mobileEditModeBlocks.has(blockKey);
+      const editToggleBtn = toolbar.createEl("button", {
+        text: isEditingInitially ? "Done editing" : "Edit layout",
+      });
+      editToggleBtn.classList.add("bento-edit-toggle-btn");
+      editToggleBtn.classList.toggle("is-active", isEditingInitially);
+      editToggleBtn.setAttr("aria-pressed", String(isEditingInitially));
+
+      this.registerDomEvent(
+        editToggleBtn,
+        "click",
+        (e) => {
+          e.stopPropagation();
+          const isEditing = container.classList.toggle("bento-edit-mode");
+          if (isEditing) {
+            this.mobileEditModeBlocks.add(blockKey);
+          } else {
+            this.mobileEditModeBlocks.delete(blockKey);
+          }
+          editToggleBtn.classList.toggle("is-active", isEditing);
+          editToggleBtn.setText(isEditing ? "Done editing" : "Edit layout");
+          editToggleBtn.setAttr("aria-pressed", String(isEditing));
+        });
+    }
+
     const addBtn = toolbar.createEl("button", { text: "Add widget" });
     addBtn.classList.add("bento-add-btn");
 
@@ -625,7 +667,7 @@ export default class BentoPlugin extends Plugin {
       await widget.render();
       widgetRegistry.set(widgetWrap, widget);
     } catch (e) {
-      widgetWrap.createEl("div", { text: `Widget failed to load: ${e}` });
+      widgetWrap.createDiv({ text: `Widget failed to load: ${e}` });
     } finally {
       this.isRendering = false;
     }
@@ -705,7 +747,7 @@ export default class BentoPlugin extends Plugin {
     ctx: MarkdownPostProcessorContext,
     item: BentoItem,
   ) {
-    const clone: BentoItem = structuredClone(item);
+    const clone: BentoItem = cloneDeep(item);
     clone.id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const OFFSET = 12;
@@ -1117,11 +1159,42 @@ export default class BentoPlugin extends Plugin {
     let dragging = false;
     let isColliding = false;
 
+    const blockNativeTouch = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onTouchStartCapture = (e: TouchEvent) => {
+      if (Platform.isMobile) {
+        if (!this.isMobileEditModeActive(el)) return;
+        const target = e.target as HTMLElement;
+        if (!target.closest(".bento-item-header-div")) return;
+      } else {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     const onPointerDown = (e: PointerEvent) => {
       if ((e.target as HTMLElement).classList.contains("resize-handle")) return;
       const tag = (e.target as HTMLElement).tagName;
       if (["INPUT", "TEXTAREA", "SELECT", "BUTTON", "LABEL"].includes(tag))
         return;
+
+      if (Platform.isMobile) {
+        if (!this.isMobileEditModeActive(el)) return;
+        const target = e.target as HTMLElement;
+        if (!target.closest(".bento-item-header-div")) return;
+      }
+
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+        this.registerDomEvent(window, "touchmove", blockNativeTouch, {
+          passive: false,
+        });
+      }
+
       startX = e.clientX;
       startY = e.clientY;
       startItemX = item.x;
@@ -1129,6 +1202,7 @@ export default class BentoPlugin extends Plugin {
       dragging = false;
       this.registerDomEvent(window, "pointermove", onPointerMove);
       this.registerDomEvent(window, "pointerup", onPointerUp);
+      this.registerDomEvent(window, "pointercancel", onPointerUp);
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -1159,6 +1233,8 @@ export default class BentoPlugin extends Plugin {
     const onPointerUp = (e: PointerEvent) => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("touchmove", blockNativeTouch);
 
       if (el.hasPointerCapture(e.pointerId)) {
         el.releasePointerCapture(e.pointerId);
@@ -1166,7 +1242,7 @@ export default class BentoPlugin extends Plugin {
       if (!dragging) return;
       el.classList.remove("dragging", "is-colliding");
       dragging = false;
-      if (isColliding) {
+      if (isColliding || e.type === "pointercancel") {
         item.x = startItemX;
         item.y = startItemY;
         el.style.setProperty("--bento-item-x", `${item.x}px`);
@@ -1177,6 +1253,9 @@ export default class BentoPlugin extends Plugin {
     };
 
     this.registerDomEvent(el, "pointerdown", onPointerDown);
+    this.registerDomEvent(el, "touchstart", onTouchStartCapture, {
+      passive: false,
+    });
   }
 
   private makeResizable(
@@ -1198,8 +1277,28 @@ export default class BentoPlugin extends Plugin {
       let startItemY = 0;
       let isColliding = false;
 
+      const blockNativeTouch = (e: TouchEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      const onTouchStartCapture = (e: TouchEvent) => {
+        if (Platform.isMobile && !this.isMobileEditModeActive(el)) return;
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
       const onPointerDown = (e: PointerEvent) => {
         e.stopPropagation();
+
+        if (Platform.isMobile && !this.isMobileEditModeActive(el)) return;
+
+        if (e.pointerType === "touch") {
+          e.preventDefault();
+          this.registerDomEvent(window, "touchmove", blockNativeTouch, {
+            passive: false,
+          });
+        }
 
         startX = e.clientX;
         startY = e.clientY;
@@ -1213,6 +1312,7 @@ export default class BentoPlugin extends Plugin {
         }
         this.registerDomEvent(window, "pointermove", onPointerMove);
         this.registerDomEvent(window, "pointerup", onPointerUp);
+        this.registerDomEvent(window, "pointercancel", onPointerUp);
       };
 
       const onPointerMove = (e: PointerEvent) => {
@@ -1301,6 +1401,8 @@ export default class BentoPlugin extends Plugin {
       const onPointerUp = (e: PointerEvent) => {
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        window.removeEventListener("touchmove", blockNativeTouch);
 
         if (handle.hasPointerCapture(e.pointerId)) {
           handle.releasePointerCapture(e.pointerId);
@@ -1309,7 +1411,7 @@ export default class BentoPlugin extends Plugin {
         el.classList.remove("is-colliding");
         el.classList.remove("snap-active");
 
-        if (isColliding) {
+        if (isColliding || e.type === "pointercancel") {
           item.x = startItemX;
           item.y = startItemY;
           item.width = startW;
@@ -1326,7 +1428,14 @@ export default class BentoPlugin extends Plugin {
       };
 
       this.registerDomEvent(handle, "pointerdown", onPointerDown);
+      this.registerDomEvent(handle, "touchstart", onTouchStartCapture, {
+        passive: false,
+      });
     });
+  }
+
+  private isMobileEditModeActive(el: HTMLElement): boolean {
+    return el.closest("[data-bento-root]")?.classList.contains("bento-edit-mode") ?? false;
   }
 
   private findCollisions(item: BentoItem, items: BentoItem[]): BentoItem[] {
