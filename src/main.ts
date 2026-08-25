@@ -15,10 +15,6 @@ import {
 
 type BentoItemType = "text" | "image" | "markdown" | "page" | "countdown";
 
-function cloneDeep<T>(value: T): T {
-  return structuredClone(value) as T;
-}
-
 interface BentoItem {
   id: string;
   type: BentoItemType;
@@ -747,7 +743,7 @@ export default class BentoPlugin extends Plugin {
     ctx: MarkdownPostProcessorContext,
     item: BentoItem,
   ) {
-    const clone: BentoItem = cloneDeep(item);
+    const clone: BentoItem = structuredClone(item);
     clone.id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const OFFSET = 12;
