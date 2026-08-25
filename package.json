@@ -1,6 +1,6 @@
 {
   "name": "obsidian-bento-plugin",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "A draggable, resizable bento-style grid for Obsidian",
   "main": "main.js",
   "scripts": {
@@ -27,7 +27,7 @@
     "globals": "^16.5.0",
     "jiti": "^2.6.1",
     "obsidian": "1.13.0",
-    "typescript": "^5.7.0",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0"
   }
 }
