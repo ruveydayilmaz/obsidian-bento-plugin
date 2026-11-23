@@ -4,16 +4,30 @@ import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default defineConfig([
   ...obsidianmd.configs.recommended,
+
+  {
+    files: ["esbuild.config.mjs"],
+    rules: {
+      "obsidianmd/no-nodejs-modules": "off",
+    },
+  },
+
   {
     files: ["**/*.ts"],
     languageOptions: {
       parser: tseslint.parser,
-      parserOptions: { project: "./tsconfig.json" },
+      parserOptions: {
+        project: "./tsconfig.json",
+      },
     },
+  },
 
-    rules: {
-    //   "obsidianmd/sample-names": "off",
-    //   "obsidianmd/prefer-file-manager-trash": "error",
+  {
+    files: ["src/shims/immediate.js"],
+    languageOptions: {
+      globals: {
+        module: "readonly",
+      },
     },
   },
 ]);
