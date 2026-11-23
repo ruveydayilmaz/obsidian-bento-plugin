@@ -663,7 +663,8 @@ export default class BentoPlugin extends Plugin {
       await widget.render();
       widgetRegistry.set(widgetWrap, widget);
     } catch (e) {
-      widgetWrap.createDiv({ text: `Widget failed to load: ${e}` });
+      const message = e instanceof Error ? e.message : String(e);
+      widgetWrap.createDiv({ text: `Widget failed to load: ${message}` });
     } finally {
       this.isRendering = false;
     }

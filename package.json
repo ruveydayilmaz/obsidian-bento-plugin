@@ -1,12 +1,13 @@
 {
   "name": "obsidian-bento-plugin",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A draggable, resizable bento-style grid for Obsidian",
   "main": "main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "dev": "node esbuild.config.mjs"
   },
   "keywords": [
     "obsidian",
@@ -29,5 +30,11 @@
     "obsidian": "1.13.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2"
   }
 }
